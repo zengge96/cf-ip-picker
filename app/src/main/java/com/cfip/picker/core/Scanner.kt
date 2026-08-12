@@ -47,25 +47,22 @@ class Scanner(
 
         // 2. 批次循环:每批随机采样 batchSize 个 IP → RTT → 前10测速 → 达标即停
         val results = mutableListOf<ScanResult>()
-        var rangeIndex = 0
         var batchDone = 0
 
         batchLoop@ for (batch in 1..maxBatches) {
             if (cancelled) break
 
-            // 2a. 随机采样本批 IP(从剩余段里随机取,对齐原版 randomSample)
-            val ips = mutableListOf<String>()
-            while (ips.size < batchSize && rangeIndex < allRanges.size) {
-                if (cancelled) break@batchLoop
-                // 随机挑一个未用的段(简单顺序取段+段内随机IP;原版是全局随机采样)
-                val cidr = allRanges[rangeIndex]
-                rangeIndex++
-                val sampled = CidrParser.randomIps(cidr, 1)
-                if (sampled.isNotEmpty()) ips.addAll(sampled)
+            // 2a. 对齐原版 getRandomIPv4s + randomSample:
+            //     先遍历全部 /24 段,每段随机 1 个 IP;再对完整候选池整体随机采样 min(n,100)。
+            //     注意:不是顺序取前100个 CIDR 段。
+            val pool = allRanges.mapNotNull { cidr ->
+                if (cancelled) return@mapNotNull null
+                CidrParser.randomIps(cidr, 1).firstOrNull()
             }
-            if (ips.isEmpty()) break // IP 池耗尽
+            val ips = pool.shuffled().take(batchSize)
+            if (ips.isEmpty()) break
 
-            onProgress(0, ips.size, "第${batch}批:并发测延迟…")
+            onProgress(0, ips.size, "第${batch}批:随机采样${ips.size}个,并发测延迟…")
 
             // 2b. 【阶段一】并发 RTT 测延迟(原版 runRTTTest goroutine 并发)
             val rttResults = coroutineScope {
@@ -111,8 +108,7 @@ class Scanner(
                 }
             }
 
-            // 2d. 本批没达标 → 继续下一批(循环)
-            if (rangeIndex >= allRanges.size) break // IP 池耗尽
+            // 2d. 本批没达标 → 重新随机生成下一批(原版外层循环)
         }
 
         // 3. 排序:延迟优先,带宽次之(与原版一致)

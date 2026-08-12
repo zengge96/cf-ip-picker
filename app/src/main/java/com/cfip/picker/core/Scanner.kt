@@ -94,19 +94,19 @@ class Scanner(
                 batchDone++
                 onProgress(tested, candidates.size, ip)
 
-                val bandwidth = SpeedTester.test(fullUrl, expectedMbps = expectedSpeedMbps)
-                val dc = lookup.lookup(ip)
+                val speed = SpeedTester.test(ip, fullUrl, expectedMbps = expectedSpeedMbps)
+                val dc = lookup.lookup(speed.colo)
                 results.add(
                     ScanResult(
                         ip = ip,
                         latencyMs = latency,
-                        bandwidthMbps = bandwidth,
+                        bandwidthMbps = speed.bandwidthMbps,
                         dataCenter = dc,
                         elapsedMs = System.currentTimeMillis(),
                     )
                 )
                 // 达到期望网速 → 立即停止整个扫描(原版 maxSpeed 达标即停)
-                if (expectedSpeedMbps > 0 && bandwidth >= expectedSpeedMbps) {
+                if (expectedSpeedMbps > 0 && speed.bandwidthMbps >= expectedSpeedMbps) {
                     break@batchLoop
                 }
             }

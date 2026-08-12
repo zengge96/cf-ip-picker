@@ -28,6 +28,23 @@ fun MainScreen(viewModel: MainViewModel) {
         )
         Spacer(Modifier.height(12.dp))
 
+        // 期望网速设置(原版 editBandwidth,达标即停;0 = 不限)
+        OutlinedTextField(
+            value = if (state.expectedSpeed == 0) "" else state.expectedSpeed.toString(),
+            onValueChange = { v ->
+                val n = v.filter { it.isDigit() }.toIntOrNull() ?: 0
+                viewModel.setExpectedSpeed(n)
+            },
+            label = { Text("期望网速 (Mbps, 留空不限)") },
+            singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+            ),
+            enabled = !state.scanning,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(12.dp))
+
         // 控制按钮
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(

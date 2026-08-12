@@ -20,6 +20,8 @@ data class UiState(
     val currentIp: String = "",
     val results: List<ScanResult> = emptyList(),
     val error: String? = null,
+    // 期望网速(Mbps),0 = 不限(原版 editBandwidth)
+    val expectedSpeed: Int = 0,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -34,9 +36,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         initApiCache(app)
     }
 
+    /** 设置期望网速(原版 normalizeBandwidthInput,0 表示不限) */
+    fun setExpectedSpeed(mbps: Int) {
+        _state.value = _state.value.copy(expectedSpeed = mbps.coerceAtLeast(0))
+    }
+
     fun startScan() {
         if (_state.value.scanning) return
         _state.value = _state.value.copy(scanning = true, error = null)
+        val expected = _state.value.expectedSpeed
         scanJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 // 1. 拉取测速文件路径 + 机房位置(网络操作必须在 IO 线程)
@@ -45,12 +53,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val scanner = Scanner { done, total, ip ->
                     _state.value = _state.value.copy(progress = done, total = total, currentIp = ip)
                 }
-                // 2. 执行扫描:v4+v6 双栈 + 机房反查(与原版功能对齐)
+                // 2. 执行扫描:只扫 IPv4 + 两阶段(并发 RTT → 单线程测速) + 期望网速达标即停
                 val results = scanner.scan(
                     samplePerRange = 1,
                     maxRanges = 200,
                     speedTestFile = speedFile,
-                    useIpv6 = true,
+                    expectedSpeedMbps = expected,
+                    maxSpeedTestCandidates = 15,
                     locationsJson = locations,
                 )
                 _state.value = _state.value.copy(scanning = false, results = results)

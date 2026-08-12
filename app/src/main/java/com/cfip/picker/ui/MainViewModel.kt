@@ -53,13 +53,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val scanner = Scanner { done, total, ip ->
                     _state.value = _state.value.copy(progress = done, total = total, currentIp = ip)
                 }
-                // 2. 执行扫描:只扫 IPv4 + 两阶段(并发 RTT → 单线程测速) + 期望网速达标即停
+                // 2. 执行扫描:批次循环对齐原版(每批≤100随机采样 → 并发RTT → 排序 → 前10测速 → 达标即停,没达标下一批)
                 val results = scanner.scan(
-                    samplePerRange = 1,
-                    maxRanges = 200,
+                    batchSize = 100,
+                    speedTestCandidates = 10,
                     speedTestFile = speedFile,
                     expectedSpeedMbps = expected,
-                    maxSpeedTestCandidates = 15,
+                    maxBatches = 20,
                     locationsJson = locations,
                 )
                 _state.value = _state.value.copy(scanning = false, results = results)

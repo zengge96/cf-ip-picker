@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
  * 与原版一致:downloadAllData 拉取后缓存到本地,减少重复请求
  */
 object ApiClient {
-    private const val BASE = "https://www.baipiao.eu.org/cloudflare"
+    private const val BASE = "https://pan.1996999.xyz"
     private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L  // 缓存 6 小时
 
     private val client = OkHttpClient.Builder()

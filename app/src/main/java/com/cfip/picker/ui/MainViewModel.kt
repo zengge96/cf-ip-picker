@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.cfip.picker.core.ApiClient
 import com.cfip.picker.core.Scanner
 import com.cfip.picker.data.ScanResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

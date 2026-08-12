@@ -28,6 +28,7 @@ class Scanner(
      * @param expectedSpeedMbps 期望网速;>0 时达标即停,0 表示不限
      * @param maxBatches 最多批次(防死循环;原版理论上直到找到)
      * @param locationsJson 机房位置数据(用于反查 IP 归属,可为空)
+     * @param ipPrefix 用户指定 IPv4 前缀(如 172.64.x.x);为空则保持原版全量随机逻辑
      */
     suspend fun scan(
         batchSize: Int = 100,
@@ -36,9 +37,11 @@ class Scanner(
         expectedSpeedMbps: Int = 0,
         maxBatches: Int = 20,
         locationsJson: String = "[]",
+        ipPrefix: String = "",
     ): List<ScanResult> = withContext(Dispatchers.IO) {
         cancelled = false
         val lookup = DataCenterLookup(locationsJson)
+        val prefixFilter = IpPrefixFilter.parse(ipPrefix)
 
         // 1. 拉取全部 IPv4 段(只扫 IPv4,用户明确不要 IPv6)
         val allRanges = ApiClient.getIpv4Ranges()
@@ -57,12 +60,17 @@ class Scanner(
             //     注意:不是顺序取前100个 CIDR 段。
             val pool = allRanges.mapNotNull { cidr ->
                 if (cancelled) return@mapNotNull null
-                CidrParser.randomIps(cidr, 1).firstOrNull()
+                if (prefixFilter.enabled) {
+                    prefixFilter.randomIpFromCidr(cidr)
+                } else {
+                    CidrParser.randomIps(cidr, 1).firstOrNull()
+                }
             }
             val ips = pool.shuffled().take(batchSize)
             if (ips.isEmpty()) break
 
-            onProgress(0, ips.size, "第${batch}批:随机采样${ips.size}个,并发测延迟…")
+            val prefixText = if (prefixFilter.enabled) "前缀匹配" else "随机采样"
+            onProgress(0, ips.size, "第${batch}批:${prefixText}${ips.size}个,并发测延迟…")
 
             // 2b. 【阶段一】并发 RTT 测延迟(原版 runRTTTest goroutine 并发)
             val rttResults = coroutineScope {

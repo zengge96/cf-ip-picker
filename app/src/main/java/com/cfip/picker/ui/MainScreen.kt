@@ -43,6 +43,17 @@ fun MainScreen(viewModel: MainViewModel) {
             enabled = !state.scanning,
             modifier = Modifier.fillMaxWidth(),
         )
+        Spacer(Modifier.height(8.dp))
+
+        // IP 前缀过滤(增强功能;为空则保持原版全量随机逻辑)
+        OutlinedTextField(
+            value = state.ipPrefix,
+            onValueChange = { v -> viewModel.setIpPrefix(v) },
+            label = { Text("IP 前缀 (如 172.64.x.x, 留空不限)") },
+            singleLine = true,
+            enabled = !state.scanning,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Spacer(Modifier.height(12.dp))
 
         // 控制按钮

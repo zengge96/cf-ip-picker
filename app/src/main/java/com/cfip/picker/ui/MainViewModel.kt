@@ -22,6 +22,8 @@ data class UiState(
     val error: String? = null,
     // 期望网速(Mbps),0 = 不限(原版 editBandwidth)
     val expectedSpeed: Int = 0,
+    // 用户指定 IPv4 前缀,如 172.64.x.x;空 = 保持原版全量随机逻辑
+    val ipPrefix: String = "",
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -41,10 +43,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = _state.value.copy(expectedSpeed = mbps.coerceAtLeast(0))
     }
 
+    /** 设置 IPv4 前缀过滤;空表示不限制 */
+    fun setIpPrefix(prefix: String) {
+        _state.value = _state.value.copy(ipPrefix = prefix.trim())
+    }
+
     fun startScan() {
         if (_state.value.scanning) return
         _state.value = _state.value.copy(scanning = true, error = null)
         val expected = _state.value.expectedSpeed
+        val prefix = _state.value.ipPrefix
         scanJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 // 1. 拉取测速文件路径 + 机房位置(网络操作必须在 IO 线程)
@@ -61,6 +69,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     expectedSpeedMbps = expected,
                     maxBatches = 20,
                     locationsJson = locations,
+                    ipPrefix = prefix,
                 )
                 _state.value = _state.value.copy(scanning = false, results = results)
             } catch (e: Exception) {

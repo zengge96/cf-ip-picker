@@ -69,6 +69,27 @@ fun MainScreen(viewModel: MainViewModel) {
         )
         Spacer(Modifier.height(12.dp))
 
+        // 通过百度前置代理测试(增强功能;开启后 RTT/测速走 cloudnproxy.baidu.com 隧道)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("通过百度前置代理测试", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "走 cloudnproxy.baidu.com 隧道测速",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = state.useBaiduProxy,
+                onCheckedChange = { v -> viewModel.setUseBaiduProxy(v) },
+                enabled = !state.scanning,
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+
         // 控制按钮
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(

@@ -24,6 +24,8 @@ data class UiState(
     val expectedSpeed: Int = 0,
     // 用户指定 IPv4 前缀,如 172.64.x.x;空 = 保持原版全量随机逻辑
     val ipPrefix: String = "",
+    // 是否通过百度前置代理测试(开启后 RTT/测速走 cloudnproxy.baidu.com 隧道)
+    val useBaiduProxy: Boolean = false,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -48,11 +50,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = _state.value.copy(ipPrefix = prefix.trim())
     }
 
+    /** 设置是否通过百度前置代理测试 */
+    fun setUseBaiduProxy(enable: Boolean) {
+        _state.value = _state.value.copy(useBaiduProxy = enable)
+    }
+
     fun startScan() {
         if (_state.value.scanning) return
         _state.value = _state.value.copy(scanning = true, error = null)
         val expected = _state.value.expectedSpeed
         val prefix = _state.value.ipPrefix
+        val useProxy = _state.value.useBaiduProxy
         scanJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 // 1. 拉取测速文件路径 + 机房位置(网络操作必须在 IO 线程)
@@ -70,6 +78,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     maxBatches = 20,
                     locationsJson = locations,
                     ipPrefix = prefix,
+                    useBaiduProxy = useProxy,
                 )
                 _state.value = _state.value.copy(scanning = false, results = results)
             } catch (e: Exception) {

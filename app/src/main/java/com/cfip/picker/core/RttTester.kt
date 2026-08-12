@@ -10,7 +10,7 @@ import kotlin.math.roundToInt
 object RttTester {
 
     /**
-     * 测试与 [ip]:[port] 的 TCP 连接延迟
+     * 测试与 [ip]:[port] 的 TCP 连接延迟(直连)
      * @return 延迟毫秒;失败返回 -1
      */
     fun test(ip: String, port: Int = 443, timeoutMs: Int = 3000): Int {
@@ -20,6 +20,22 @@ object RttTester {
             socket.connect(InetSocketAddress(ip, port), timeoutMs)
             val elapsed = System.currentTimeMillis() - start
             socket.close()
+            elapsed.toInt()
+        } catch (e: Exception) {
+            -1
+        }
+    }
+
+    /**
+     * 通过百度前置代理测试与 [ip]:[port] 的隧道延迟
+     * @return 含代理建链的延迟毫秒;失败返回 -1
+     */
+    fun testViaBaiduProxy(ip: String, port: Int = 443, timeoutMs: Int = 8000): Int {
+        return try {
+            val start = System.currentTimeMillis()
+            val sock = BaiduProxy.connect(ip, port, timeoutMs)
+            val elapsed = System.currentTimeMillis() - start
+            sock.close()
             elapsed.toInt()
         } catch (e: Exception) {
             -1

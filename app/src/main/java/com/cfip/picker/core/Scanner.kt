@@ -29,6 +29,7 @@ class Scanner(
      * @param maxBatches 最多批次(防死循环;原版理论上直到找到)
      * @param locationsJson 机房位置数据(用于反查 IP 归属,可为空)
      * @param ipPrefix 用户指定 IPv4 前缀(如 172.64.x.x);为空则保持原版全量随机逻辑
+     * @param useBaiduProxy 是否通过百度前置代理测试(开启后 RTT/测速都走代理隧道)
      */
     suspend fun scan(
         batchSize: Int = 100,
@@ -38,6 +39,7 @@ class Scanner(
         maxBatches: Int = 20,
         locationsJson: String = "[]",
         ipPrefix: String = "",
+        useBaiduProxy: Boolean = false,
     ): List<ScanResult> = withContext(Dispatchers.IO) {
         cancelled = false
         val lookup = DataCenterLookup(locationsJson)
@@ -72,13 +74,13 @@ class Scanner(
             val prefixText = if (prefixFilter.enabled) "前缀匹配" else "随机采样"
             onProgress(0, ips.size, "第${batch}批:${prefixText}${ips.size}个,并发测延迟…")
 
-            // 2b. 【阶段一】并发 RTT 测延迟(原版 runRTTTest goroutine 并发)
+            // 2b. 【阶段一】并发 RTT 测延迟(原版 runRTTTest goroutine 并发;代理模式走百度隧道)
             val rttResults = coroutineScope {
                 ips.map { ip ->
                     async {
                         if (cancelled) null
                         else {
-                            val latency = RttTester.test(ip, 443)
+                            val latency = if (useBaiduProxy) RttTester.testViaBaiduProxy(ip, 443) else RttTester.test(ip, 443)
                             if (latency < 0) null else ip to latency
                         }
                     }
@@ -99,7 +101,11 @@ class Scanner(
                 batchDone++
                 onProgress(tested, candidates.size, ip)
 
-                val speed = SpeedTester.test(ip, fullUrl, expectedMbps = expectedSpeedMbps)
+                val speed = if (useBaiduProxy) {
+                    SpeedTester.testViaBaiduProxy(ip, fullUrl, expectedMbps = expectedSpeedMbps)
+                } else {
+                    SpeedTester.test(ip, fullUrl, expectedMbps = expectedSpeedMbps)
+                }
                 val dc = lookup.lookup(speed.colo)
                 results.add(
                     ScanResult(

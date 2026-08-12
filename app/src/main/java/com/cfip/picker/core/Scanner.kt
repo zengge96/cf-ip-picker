@@ -3,11 +3,10 @@ package com.cfip.picker.core
 import com.cfip.picker.data.ScanResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
 
 /**
  * 扫描调度器:复刻原版工作流
- *   拉数据 → 随机采样 IP → RTT 测延迟 → 下载测速 → 排序
+ *   拉数据 → 随机采样 IP(v4+v6)→ RTT 测延迟 → 下载测速 → 机房反查 → 排序
  */
 class Scanner(
     private val onProgress: (done: Int, total: Int, current: String) -> Unit,
@@ -21,21 +20,31 @@ class Scanner(
      * @param samplePerRange 每个 CIDR 段采样几个 IP
      * @param maxRanges 最多用几个段
      * @param speedTestFile 测速文件路径(来自 /url 端点)
+     * @param useIpv6 是否同时扫描 IPv6 段(原版支持 v4+v6 双栈)
+     * @param locationsJson 机房位置数据(用于反查 IP 归属,可为空)
      */
     suspend fun scan(
         samplePerRange: Int = 1,
         maxRanges: Int = 300,
         speedTestFile: String,
+        useIpv6: Boolean = true,
+        locationsJson: String = "[]",
     ): List<ScanResult> = withContext(Dispatchers.IO) {
         cancelled = false
         val results = mutableListOf<ScanResult>()
+        val lookup = DataCenterLookup(locationsJson)
 
-        // 1. 拉取 CF IPv4 段(IPv6 段数量大,默认只用 v4,保持与原版一致的速度)
-        val ranges = ApiClient.getIpv4Ranges().take(maxRanges)
-        val total = ranges.size
+        // 1. 拉取 CF IPv4 + IPv6 段(与原版 getRandomIPv4s/getRandomIPv6s 一致)
+        val ranges = mutableListOf<String>()
+        ranges += ApiClient.getIpv4Ranges()
+        if (useIpv6) {
+            ranges += ApiClient.getIpv6Ranges()
+        }
+        val selected = ranges.take(maxRanges)
+        val total = selected.size
         var done = 0
 
-        for (cidr in ranges) {
+        for (cidr in selected) {
             if (cancelled) break
 
             // 2. 采样 IP
@@ -53,12 +62,15 @@ class Scanner(
                              else "https://$speedTestFile"
                 val bandwidth = SpeedTester.test(fullUrl)
 
+                // 5. 机房反查(原版 lookupDataCenter,基于 locations.json 的 IP 归属)
+                val dc = lookup.lookup(ip)
+
                 results.add(
                     ScanResult(
                         ip = ip,
                         latencyMs = latency,
                         bandwidthMbps = bandwidth,
-                        dataCenter = "?",
+                        dataCenter = dc,
                         elapsedMs = System.currentTimeMillis(),
                     )
                 )
@@ -66,7 +78,7 @@ class Scanner(
             done++
         }
 
-        // 5. 排序:延迟优先,带宽次之
+        // 6. 排序:延迟优先,带宽次之(与原版一致)
         results.sortedWith(
             compareBy<ScanResult> { it.latencyMs }
                 .thenByDescending { it.bandwidthMbps }

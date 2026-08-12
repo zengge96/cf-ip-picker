@@ -93,6 +93,14 @@ private fun ScanResultRow(r: com.cfip.picker.data.ScanResult) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // 机房位置(原版 lookupDataCenter 显示,如 "HKG - Hong Kong")
+                if (r.dataCenter.isNotEmpty() && r.dataCenter != "?") {
+                    Text(
+                        "📍 ${r.dataCenter}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
             Text(
                 "${r.latencyMs}ms",

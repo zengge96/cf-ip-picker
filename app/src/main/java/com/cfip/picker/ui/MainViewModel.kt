@@ -1,9 +1,11 @@
 package com.cfip.picker.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cfip.picker.core.ApiClient
 import com.cfip.picker.core.Scanner
+import com.cfip.picker.core.initApiCache
 import com.cfip.picker.data.ScanResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,25 +22,37 @@ data class UiState(
     val error: String? = null,
 )
 
-class MainViewModel : ViewModel() {
+class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state
 
     private var scanJob: Job? = null
 
+    init {
+        // 初始化数据缓存目录(对应原版 setCacheDir)
+        initApiCache(app)
+    }
+
     fun startScan() {
         if (_state.value.scanning) return
         _state.value = _state.value.copy(scanning = true, error = null)
         scanJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1. 拉取测速文件路径(网络操作必须在 IO 线程)
+                // 1. 拉取测速文件路径 + 机房位置(网络操作必须在 IO 线程)
                 val speedFile = ApiClient.getSpeedTestUrl()
+                val locations = ApiClient.getLocations()
                 val scanner = Scanner { done, total, ip ->
                     _state.value = _state.value.copy(progress = done, total = total, currentIp = ip)
                 }
-                // 2. 执行扫描(默认每段采 1 个,最多 200 段,避免过久)
-                val results = scanner.scan(samplePerRange = 1, maxRanges = 200, speedTestFile = speedFile)
+                // 2. 执行扫描:v4+v6 双栈 + 机房反查(与原版功能对齐)
+                val results = scanner.scan(
+                    samplePerRange = 1,
+                    maxRanges = 200,
+                    speedTestFile = speedFile,
+                    useIpv6 = true,
+                    locationsJson = locations,
+                )
                 _state.value = _state.value.copy(scanning = false, results = results)
             } catch (e: Exception) {
                 android.util.Log.e("CFIPPicker", "扫描失败", e)

@@ -29,9 +29,9 @@ class MainViewModel : ViewModel() {
     fun startScan() {
         if (_state.value.scanning) return
         _state.value = _state.value.copy(scanning = true, error = null)
-        scanJob = viewModelScope.launch {
+        scanJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1. 拉取测速文件路径
+                // 1. 拉取测速文件路径(网络操作必须在 IO 线程)
                 val speedFile = ApiClient.getSpeedTestUrl()
                 val scanner = Scanner { done, total, ip ->
                     _state.value = _state.value.copy(progress = done, total = total, currentIp = ip)
@@ -40,6 +40,7 @@ class MainViewModel : ViewModel() {
                 val results = scanner.scan(samplePerRange = 1, maxRanges = 200, speedTestFile = speedFile)
                 _state.value = _state.value.copy(scanning = false, results = results)
             } catch (e: Exception) {
+                android.util.Log.e("CFIPPicker", "扫描失败", e)
                 _state.value = _state.value.copy(scanning = false, error = e.message ?: "扫描失败")
             }
         }

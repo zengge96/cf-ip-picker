@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., v1.0.0)'
+        description: 'Version tag (e.g., v1.0.0). 留空则只构建不上传'
         required: false
-        default: 'v1.0.0'
+        default: ''
   push:
     branches: [ main ]
 
@@ -40,19 +40,32 @@ jobs:
         run: |
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
           if [ -n "$APK" ]; then
-            cp "$APK" "cf-ip-picker_${{ github.event.inputs.version || 'v1.0.0' }}.apk"
+            if [ -n "${{ github.event.inputs.version }}" ]; then
+              cp "$APK" "cf-ip-picker_${{ github.event.inputs.version }}.apk"
+            else
+              cp "$APK" "cf-ip-picker.apk"
+            fi
+            ls -lh cf-ip-picker*.apk
           fi
 
-      - name: Upload APK artifact
+      # 不传 version 时:上传 artifact(push 触发,便于日常构建)
+      - name: Upload APK artifact (dev)
+        if: github.event.inputs.version == ''
         uses: actions/upload-artifact@v4
         with:
           name: cf-ip-picker-apk
-          path: "cf-ip-picker_*.apk"
+          path: "cf-ip-picker.apk"
+          retention-days: 7
 
+      # 传 version 时:直接创建 GitHub Release(绕开 artifact 配额)
       - name: Create Release
         if: github.event.inputs.version != ''
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.inputs.version }}
-          files: "cf-ip-picker_*.apk"
-          prerelease: false
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.event.inputs.version }}" \
+            "cf-ip-picker_${{ github.event.inputs.version }}.apk" \
+            --repo "${{ github.repository }}" \
+            --title "CF优选IP ${{ github.event.inputs.version }}" \
+            --notes "CF优选IP 逆向重写版 - 纯 Kotlin + Jetpack Compose" \
+            --generate-notes || true

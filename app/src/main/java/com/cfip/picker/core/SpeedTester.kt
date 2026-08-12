@@ -135,7 +135,7 @@ object SpeedTester {
                 val n = input.read(scout)
                 if (n < 0) break
                 headerBuf.write(scout, 0, n)
-                val head = headerBuf.toString(Charsets.ISO_8859_1)
+                val head = String(headerBuf.toByteArray(), Charsets.ISO_8859_1)
                 val idx = head.indexOf("\r\n\r\n")
                 if (idx >= 0) {
                     headerEnd = idx + 4

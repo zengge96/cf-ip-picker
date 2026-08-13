@@ -31,7 +31,7 @@ object SpeedTester {
      * @param expectedMbps 期望网速;>0 时达到即停(原版 maxSpeed 达标即停)
      * @return 带宽 Mbps + 机房代码(失败返回 0.0 + null)
      */
-    fun test(ip: String, url: String, maxDurationMs: Long = 3000, expectedMbps: Int = 0): SpeedTestResult {
+    fun test(ip: String, url: String, maxDurationMs: Long = 10000, expectedMbps: Int = 0): SpeedTestResult {
         return try {
             val host = url.toHttpUrl().host
             val client = OkHttpClient.Builder()
@@ -99,7 +99,7 @@ object SpeedTester {
      * @param ip 当前候选 CF IP(隧道目标)
      * @param expectedMbps 期望网速;>0 时达到即停
      */
-    fun testViaBaiduProxy(ip: String, url: String, maxDurationMs: Long = 3000, expectedMbps: Int = 0): SpeedTestResult {
+    fun testViaBaiduProxy(ip: String, url: String, maxDurationMs: Long = 10000, expectedMbps: Int = 0): SpeedTestResult {
         var raw: java.net.Socket? = null
         var ssl: SSLSocket? = null
         try {

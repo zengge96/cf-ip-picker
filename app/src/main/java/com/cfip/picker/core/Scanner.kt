@@ -71,7 +71,7 @@ class Scanner(
             while (pool.size < batchSize && round < 100) {
                 if (cancelled) break
                 round++
-                for (cidr in allRanges) {
+                for (cidr in allRanges.shuffled()) {
                     if (cancelled || pool.size >= batchSize) break
                     val ip = if (prefixFilter.enabled) {
                         prefixFilter.randomIpFromCidr(cidr)

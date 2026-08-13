@@ -22,6 +22,8 @@ data class UiState(
     val error: String? = null,
     // 期望网速(Mbps),0 = 不限(原版 editBandwidth)
     val expectedSpeed: Int = 0,
+    // 期望时延(ms),0 = 不限;RTT 测试后筛选,只保留延迟 <= 期望值的 IP
+    val expectedLatencyMs: Int = 0,
     // 用户指定 IPv4 前缀,如 172.64.x.x;空 = 保持原版全量随机逻辑
     val ipPrefix: String = "",
     // 是否通过百度前置代理测试(开启后 RTT/测速走 cloudnproxy.baidu.com 隧道)
@@ -45,6 +47,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = _state.value.copy(expectedSpeed = mbps.coerceAtLeast(0))
     }
 
+    /** 设置期望时延(ms),0 表示不限 */
+    fun setExpectedLatency(ms: Int) {
+        _state.value = _state.value.copy(expectedLatencyMs = ms.coerceAtLeast(0))
+    }
+
     /** 设置 IPv4 前缀过滤;空表示不限制 */
     fun setIpPrefix(prefix: String) {
         _state.value = _state.value.copy(ipPrefix = prefix.trim())
@@ -59,6 +66,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_state.value.scanning) return
         _state.value = _state.value.copy(scanning = true, error = null)
         val expected = if (_state.value.expectedSpeed > 0) _state.value.expectedSpeed else 1 // 留空默认 1Mbps
+        val expectedLatency = _state.value.expectedLatencyMs
         val prefix = _state.value.ipPrefix
         val useProxy = _state.value.useBaiduProxy
         scanJob = viewModelScope.launch(Dispatchers.IO) {
@@ -77,6 +85,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     speedTestFile = speedFile,
                     httpTestUrl = httpTestUrl,
                     expectedSpeedMbps = expected,
+                    expectedLatencyMs = expectedLatency,
                     maxBatches = 20,
                     locationsJson = locations,
                     ipPrefix = prefix,

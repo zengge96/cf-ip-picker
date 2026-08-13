@@ -60,6 +60,23 @@ fun MainScreen(viewModel: MainViewModel) {
         )
         Spacer(Modifier.height(8.dp))
 
+        // 期望时延设置(增强功能;RTT 测试后筛选,单位 ms;留空不限)
+        OutlinedTextField(
+            value = if (state.expectedLatencyMs == 0) "" else state.expectedLatencyMs.toString(),
+            onValueChange = { v ->
+                val n = v.filter { it.isDigit() }.toIntOrNull() ?: 0
+                viewModel.setExpectedLatency(n)
+            },
+            label = { Text("期望时延 (ms, 留空不限)") },
+            singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+            ),
+            enabled = !state.scanning,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+
         // IP 前缀过滤(增强功能;为空则保持原版全量随机逻辑)
         OutlinedTextField(
             value = state.ipPrefix,

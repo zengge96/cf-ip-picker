@@ -27,6 +27,7 @@ class Scanner(
      * @param speedTestFile 测速文件路径(来自 /url 端点)
      * @param httpTestUrl 联通性测试 URL(来自 /http_test_url 端点,可为空 = 跳过联通性测试)
      * @param expectedSpeedMbps 期望网速;>0 时达标即停,0 表示不限
+     * @param expectedLatencyMs 期望时延(ms);>0 时 RTT 测试后只保留延迟 <= 期望值的 IP,0 表示不限
      * @param maxBatches 最多批次(防死循环;原版理论上直到找到)
      * @param locationsJson 机房位置数据(用于反查 IP 归属,可为空)
      * @param ipPrefix 用户指定 IPv4 前缀(如 172.64.x.x);为空则保持原版全量随机逻辑
@@ -38,6 +39,7 @@ class Scanner(
         speedTestFile: String,
         httpTestUrl: String = "",
         expectedSpeedMbps: Int = 0,
+        expectedLatencyMs: Int = 0,
         maxBatches: Int = 20,
         locationsJson: String = "[]",
         ipPrefix: String = "",
@@ -105,8 +107,14 @@ class Scanner(
                 if (cancelled) break
             }
             // 按延迟升序排序
-            val sorted = rttResults.sortedBy { it.second }
-            if (sorted.isEmpty()) continue // 本批全挂,下一批
+            val sortedAll = rttResults.sortedBy { it.second }
+            // 期望时延筛选:>0 时只保留 RTT <= 期望值的 IP
+            val sorted = if (expectedLatencyMs > 0) {
+                sortedAll.filter { it.second <= expectedLatencyMs }
+            } else {
+                sortedAll
+            }
+            if (sorted.isEmpty()) continue // 本批全挂或全被时延筛掉,下一批
 
             // 2b+. 【阶段一.5】并发联通性测试(对齐新版:用 /http_test_url 的 URL,只有联通的才进测速)
             //     同样每批 20 个并发(100 个分 5 批)

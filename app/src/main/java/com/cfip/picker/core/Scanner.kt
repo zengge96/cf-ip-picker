@@ -77,39 +77,54 @@ class Scanner(
             onProgress(0, ips.size, "第${batch}批:${prefixText}${ips.size}个,并发测延迟…")
 
             // 2b. 【阶段一】并发 RTT 测延迟(原版 runRTTTest goroutine 并发;代理模式走百度隧道)
-            val rttResults = coroutineScope {
-                ips.map { ip ->
-                    async {
-                        if (cancelled) null
-                        else {
-                            val latency = if (useBaiduProxy) RttTester.testViaBaiduProxy(ip, 443) else RttTester.test(ip, 443)
-                            if (latency < 0) null else ip to latency
+            //     每批 20 个并发,100 个分 5 批(避免一次 100 并发太猛)
+            val rttResults = mutableListOf<Pair<String, Int>>()
+            for (chunk in ips.chunked(20)) {
+                if (cancelled) break
+                val chunkResults = coroutineScope {
+                    chunk.map { ip ->
+                        async {
+                            if (cancelled) null
+                            else {
+                                val latency = if (useBaiduProxy) RttTester.testViaBaiduProxy(ip, 443) else RttTester.test(ip, 443)
+                                if (latency < 0) null else ip to latency
+                            }
                         }
-                    }
-                }.awaitAll().filterNotNull()
+                    }.awaitAll().filterNotNull()
+                }
+                rttResults += chunkResults
+                if (cancelled) break
             }
             // 按延迟升序排序
             val sorted = rttResults.sortedBy { it.second }
             if (sorted.isEmpty()) continue // 本批全挂,下一批
 
             // 2b+. 【阶段一.5】并发联通性测试(对齐新版:用 /http_test_url 的 URL,只有联通的才进测速)
+            //     同样每批 20 个并发(100 个分 5 批)
             val reachable = if (httpTestUrl.isNotBlank()) {
                 onProgress(0, sorted.size, "第${batch}批:联通性测试…")
-                coroutineScope {
-                    sorted.map { (ip, latency) ->
-                        async {
-                            if (cancelled) null
-                            else {
-                                val ok = if (useBaiduProxy) {
-                                    ConnectivityTester.testViaBaiduProxy(ip, httpTestUrl)
-                                } else {
-                                    ConnectivityTester.test(ip, httpTestUrl)
+                val reachableList = mutableListOf<Pair<String, Int>>()
+                for (chunk in sorted.chunked(20)) {
+                    if (cancelled) break
+                    val chunkOk = coroutineScope {
+                        chunk.map { (ip, latency) ->
+                            async {
+                                if (cancelled) null
+                                else {
+                                    val ok = if (useBaiduProxy) {
+                                        ConnectivityTester.testViaBaiduProxy(ip, httpTestUrl)
+                                    } else {
+                                        ConnectivityTester.test(ip, httpTestUrl)
+                                    }
+                                    if (ok) ip to latency else null
                                 }
-                                if (ok) ip to latency else null
                             }
-                        }
-                    }.awaitAll().filterNotNull()
-                }.sortedBy { it.second }
+                        }.awaitAll().filterNotNull()
+                    }
+                    reachableList += chunkOk
+                    if (cancelled) break
+                }
+                reachableList.sortedBy { it.second }
             } else {
                 sorted
             }

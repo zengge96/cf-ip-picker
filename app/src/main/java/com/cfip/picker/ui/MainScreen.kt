@@ -37,7 +37,7 @@ fun MainScreen(viewModel: MainViewModel) {
             fontWeight = FontWeight.Bold,
         )
         Text(
-            text = "Cloudflare IP 优选 · 逆向重写版",
+            text = "Cloudflare IP 优选",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -50,7 +50,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 val n = v.filter { it.isDigit() }.toIntOrNull() ?: 0
                 viewModel.setExpectedSpeed(n)
             },
-            label = { Text("期望网速 (Mbps, 留空不限)") },
+            label = { Text("期望网速 (Mbps, 留空默认1)") },
             singleLine = true,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                 keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
@@ -150,7 +150,9 @@ fun MainScreen(viewModel: MainViewModel) {
 @Composable
 private fun ScanResultRow(r: ScanResult, expectedSpeedMbps: Int, useBaiduProxy: Boolean) {
     val context = LocalContext.current
-    val isHit = expectedSpeedMbps > 0 && r.bandwidthMbps + 0.05 >= expectedSpeedMbps
+    // 留空(0)按默认 1Mbps 处理
+    val effExpected = if (expectedSpeedMbps > 0) expectedSpeedMbps else 1
+    val isHit = r.bandwidthMbps + 0.05 >= effExpected
     var showTpl by remember { mutableStateOf(false) }
 
     val bg = if (isHit) Color(0xFF1F7A3A).copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface

@@ -58,7 +58,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun startScan() {
         if (_state.value.scanning) return
         _state.value = _state.value.copy(scanning = true, error = null)
-        val expected = _state.value.expectedSpeed
+        val expected = if (_state.value.expectedSpeed > 0) _state.value.expectedSpeed else 1 // 留空默认 1Mbps
         val prefix = _state.value.ipPrefix
         val useProxy = _state.value.useBaiduProxy
         scanJob = viewModelScope.launch(Dispatchers.IO) {

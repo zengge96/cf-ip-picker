@@ -172,17 +172,6 @@ private fun ScanResultRow(r: ScanResult, expectedSpeedMbps: Int, useBaiduProxy: 
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(r.ip, fontWeight = FontWeight.SemiBold)
-                    if (isHit) {
-                        Spacer(Modifier.width(6.dp))
-                        AssistChip(
-                            onClick = { copyIpToClipboard(context, r.ip) },
-                            label = { Text("✓ 达标", style = MaterialTheme.typography.labelSmall) },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = Color(0xFF1F7A3A).copy(alpha = 0.25f),
-                                labelColor = Color(0xFF1F7A3A),
-                            ),
-                        )
-                    }
                 }
                 Text(
                     "延迟 ${r.latencyMs}ms · 带宽 %.1f Mbps".format(r.bandwidthMbps),

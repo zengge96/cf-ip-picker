@@ -15,7 +15,7 @@ data class ScanResult(
 
 /** 数据源常量(逆向自原版 APK) */
 object Api {
-    const val BASE = "https://pan.1996999.xyz"
+    const val BASE = "https://xiaoyahelper.zngle.cf"
     const val IPS_V4 = "$BASE/ips-v4"       // CF IPv4 段
     const val IPS_V6 = "$BASE/ips-v6"       // CF IPv6 段
     const val LOCATIONS = "$BASE/locations" // 301 个机房坐标

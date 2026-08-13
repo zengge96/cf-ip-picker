@@ -25,6 +25,7 @@ class Scanner(
      * @param batchSize 每批随机采样 IP 数(原版上限 100)
      * @param speedTestCandidates 延迟排序后参与测速的数量(原版前 10)
      * @param speedTestFile 测速文件路径(来自 /url 端点)
+     * @param httpTestUrl 联通性测试 URL(来自 /http_test_url 端点,可为空 = 跳过联通性测试)
      * @param expectedSpeedMbps 期望网速;>0 时达标即停,0 表示不限
      * @param maxBatches 最多批次(防死循环;原版理论上直到找到)
      * @param locationsJson 机房位置数据(用于反查 IP 归属,可为空)
@@ -35,6 +36,7 @@ class Scanner(
         batchSize: Int = 100,
         speedTestCandidates: Int = 10,
         speedTestFile: String,
+        httpTestUrl: String = "",
         expectedSpeedMbps: Int = 0,
         maxBatches: Int = 20,
         locationsJson: String = "[]",
@@ -90,10 +92,33 @@ class Scanner(
             val sorted = rttResults.sortedBy { it.second }
             if (sorted.isEmpty()) continue // 本批全挂,下一批
 
-            onProgress(0, sorted.size, "第${batch}批:延迟排序完成,测速")
+            // 2b+. 【阶段一.5】并发联通性测试(对齐新版:用 /http_test_url 的 URL,只有联通的才进测速)
+            val reachable = if (httpTestUrl.isNotBlank()) {
+                onProgress(0, sorted.size, "第${batch}批:联通性测试…")
+                coroutineScope {
+                    sorted.map { (ip, latency) ->
+                        async {
+                            if (cancelled) null
+                            else {
+                                val ok = if (useBaiduProxy) {
+                                    ConnectivityTester.testViaBaiduProxy(ip, httpTestUrl)
+                                } else {
+                                    ConnectivityTester.test(ip, httpTestUrl)
+                                }
+                                if (ok) ip to latency else null
+                            }
+                        }
+                    }.awaitAll().filterNotNull()
+                }.sortedBy { it.second }
+            } else {
+                sorted
+            }
+            if (reachable.isEmpty()) continue // 联通性全挂,下一批
+
+            onProgress(0, reachable.size, "第${batch}批:联通性通过,单线程测速")
 
             // 2c. 【阶段二】单线程测速前 N 个(原版前10),达期望网速即停
-            val candidates = sorted.take(speedTestCandidates)
+            val candidates = reachable.take(speedTestCandidates)
             var tested = 0
             for ((ip, latency) in candidates) {
                 if (cancelled) break@batchLoop

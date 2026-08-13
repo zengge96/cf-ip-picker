@@ -63,17 +63,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val useProxy = _state.value.useBaiduProxy
         scanJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1. 拉取测速文件路径 + 机房位置(网络操作必须在 IO 线程)
+                // 1. 拉取测速文件路径 + 机房位置 + 联通性测试 URL(网络操作必须在 IO 线程)
                 val speedFile = ApiClient.getSpeedTestUrl()
                 val locations = ApiClient.getLocations()
+                val httpTestUrl = ApiClient.getHttpTestUrl()
                 val scanner = Scanner { done, total, ip ->
                     _state.value = _state.value.copy(progress = done, total = total, currentIp = ip)
                 }
-                // 2. 执行扫描:批次循环对齐原版(每批≤100随机采样 → 并发RTT → 排序 → 前10测速 → 达标即停,没达标下一批)
+                // 2. 执行扫描:批次循环对齐原版(每批≤100随机采样 → 并发RTT → 联通性筛选 → 前10测速 → 达标即停,没达标下一批)
                 val results = scanner.scan(
                     batchSize = 100,
                     speedTestCandidates = 10,
                     speedTestFile = speedFile,
+                    httpTestUrl = httpTestUrl,
                     expectedSpeedMbps = expected,
                     maxBatches = 20,
                     locationsJson = locations,

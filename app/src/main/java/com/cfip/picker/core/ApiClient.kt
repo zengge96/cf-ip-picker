@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
  * 与原版一致:downloadAllData 拉取后缓存到本地,减少重复请求
  */
 object ApiClient {
-    private const val BASE = "https://pan.1996999.xyz"
+    private const val BASE = "https://xiaoyahelper.zngle.cf"
     private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L  // 缓存 6 小时
 
     private val client = OkHttpClient.Builder()
@@ -71,6 +71,9 @@ object ApiClient {
 
     /** 测速下载文件相对路径(如 cloudflaremirrors.com/oracle/...iso) */
     fun getSpeedTestUrl(): String = getCached("url").trim()
+
+    /** 联通性测试 URL(如 https://proxy.zngle.cc.cd/proxy/...) */
+    fun getHttpTestUrl(): String = getCached("http_test_url").trim()
 }
 
 /** 供 Application 初始化缓存目录 */

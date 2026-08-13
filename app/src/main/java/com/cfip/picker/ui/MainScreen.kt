@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -260,8 +261,10 @@ private fun generateConfig(context: Context, tpl: ConfigTemplate.Template, ip: S
         val json = ConfigTemplate.generate(context, tpl, ip)
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         cm?.setPrimaryClip(ClipData.newPlainText("v2ray config", json))
+        Log.d("CFIPPicker", "generateConfig OK tpl=${tpl.assetPath} ip=$ip len=${json.length} clip=${cm != null}")
         Toast.makeText(context, "已复制配置: ${tpl.displayName}", Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
+        Log.e("CFIPPicker", "generateConfig FAIL tpl=${tpl.assetPath} ip=$ip", e)
         Toast.makeText(context, "生成失败: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }

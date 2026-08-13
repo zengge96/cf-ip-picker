@@ -62,12 +62,21 @@ class Scanner(
             // 2a. 对齐原版 getRandomIPv4s + randomSample:
             //     先遍历全部 /24 段,每段随机 1 个 IP;再对完整候选池整体随机采样 min(n,100)。
             //     注意:不是顺序取前100个 CIDR 段。
-            val pool = allRanges.mapNotNull { cidr ->
-                if (cancelled) return@mapNotNull null
-                if (prefixFilter.enabled) {
-                    prefixFilter.randomIpFromCidr(cidr)
-                } else {
-                    CidrParser.randomIps(cidr, 1).firstOrNull()
+            //     增强:前缀过滤导致候选不足 batchSize 时(如 172.62.225.x 只命中 1 段),
+            //     继续多轮生成并去重,直到选够 batchSize 个,最多 100 轮。
+            val pool = LinkedHashSet<String>()
+            var round = 0
+            while (pool.size < batchSize && round < 100) {
+                if (cancelled) break
+                round++
+                for (cidr in allRanges) {
+                    if (cancelled || pool.size >= batchSize) break
+                    val ip = if (prefixFilter.enabled) {
+                        prefixFilter.randomIpFromCidr(cidr)
+                    } else {
+                        CidrParser.randomIps(cidr, 1).firstOrNull()
+                    }
+                    if (ip != null) pool.add(ip)
                 }
             }
             val ips = pool.shuffled().take(batchSize)

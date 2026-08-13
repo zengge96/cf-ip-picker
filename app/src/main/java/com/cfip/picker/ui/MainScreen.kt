@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cfip.picker.core.ConfigTemplate
 import com.cfip.picker.data.ScanResult
 import kotlin.math.roundToInt
 
@@ -134,7 +135,7 @@ fun MainScreen(viewModel: MainViewModel) {
         } else {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(state.results, key = { it.ip }) { r ->
-                    ScanResultRow(r, state.expectedSpeed)
+                    ScanResultRow(r, state.expectedSpeed, state.useBaiduProxy)
                 }
             }
         }
@@ -146,9 +147,10 @@ fun MainScreen(viewModel: MainViewModel) {
  * 达标行背景显示绿色,点击整行复制 IP 到剪贴板 + Toast 提示。
  */
 @Composable
-private fun ScanResultRow(r: ScanResult, expectedSpeedMbps: Int) {
+private fun ScanResultRow(r: ScanResult, expectedSpeedMbps: Int, useBaiduProxy: Boolean) {
     val context = LocalContext.current
     val isHit = expectedSpeedMbps > 0 && r.bandwidthMbps + 0.05 >= expectedSpeedMbps
+    var showTpl by remember { mutableStateOf(false) }
 
     val bg = if (isHit) Color(0xFF1F7A3A).copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface
 
@@ -172,9 +174,7 @@ private fun ScanResultRow(r: ScanResult, expectedSpeedMbps: Int) {
                     if (isHit) {
                         Spacer(Modifier.width(6.dp))
                         AssistChip(
-                            onClick = {
-                                copyIpToClipboard(context, r.ip)
-                            },
+                            onClick = { copyIpToClipboard(context, r.ip) },
                             label = { Text("✓ 达标", style = MaterialTheme.typography.labelSmall) },
                             colors = AssistChipDefaults.assistChipColors(
                                 containerColor = Color(0xFF1F7A3A).copy(alpha = 0.25f),
@@ -196,6 +196,16 @@ private fun ScanResultRow(r: ScanResult, expectedSpeedMbps: Int) {
                     )
                 }
             }
+            // 生成配置按钮(用优选 IP 替换模板 address,复制完整配置)
+            AssistChip(
+                onClick = { showTpl = true },
+                label = { Text("生成配置", style = MaterialTheme.typography.labelSmall) },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
+            )
+            Spacer(Modifier.width(8.dp))
             Text(
                 "${r.latencyMs}ms",
                 style = MaterialTheme.typography.titleMedium,
@@ -204,10 +214,54 @@ private fun ScanResultRow(r: ScanResult, expectedSpeedMbps: Int) {
             )
         }
     }
+
+    // 模板选择弹窗
+    if (showTpl) {
+        AlertDialog(
+            onDismissRequest = { showTpl = false },
+            title = { Text("选择模板 · 生成 v2ray 配置") },
+            text = {
+                Column(Modifier.fillMaxWidth()) {
+                    Text(
+                        "将用 IP ${r.ip} 替换模板地址",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    ConfigTemplate.available(useBaiduProxy).forEach { tpl ->
+                        TextButton(
+                            onClick = {
+                                showTpl = false
+                                generateConfig(context, tpl, r.ip)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(tpl.displayName, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showTpl = false }) { Text("取消") }
+            },
+        )
+    }
 }
 
 private fun copyIpToClipboard(context: Context, ip: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
     cm?.setPrimaryClip(ClipData.newPlainText("CF IP", ip))
     Toast.makeText(context, "已复制 IP: $ip", Toast.LENGTH_SHORT).show()
+}
+
+private fun generateConfig(context: Context, tpl: ConfigTemplate.Template, ip: String) {
+    try {
+        val json = ConfigTemplate.generate(context, tpl, ip)
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        cm?.setPrimaryClip(ClipData.newPlainText("v2ray config", json))
+        Toast.makeText(context, "已复制配置: ${tpl.displayName}", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "生成失败: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
 }

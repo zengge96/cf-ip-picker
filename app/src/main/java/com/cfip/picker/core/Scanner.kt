@@ -164,15 +164,16 @@ class Scanner(
                     SpeedTester.test(ip, fullUrl, expectedMbps = expectedSpeedMbps)
                 }
                 val dc = lookup.lookup(speed.colo)
-                results.add(
-                    ScanResult(
-                        ip = ip,
-                        latencyMs = latency,
-                        bandwidthMbps = speed.bandwidthMbps,
-                        dataCenter = dc,
-                        elapsedMs = System.currentTimeMillis(),
-                    )
+                val entry = ScanResult(
+                    ip = ip,
+                    latencyMs = latency,
+                    bandwidthMbps = speed.bandwidthMbps,
+                    dataCenter = dc,
+                    elapsedMs = System.currentTimeMillis(),
                 )
+                // 同一 IP 已测过(如精确前缀时每批都是同一个 IP)→ 更新该条记录,避免 LazyColumn key 重复崩溃
+                val idx = results.indexOfFirst { it.ip == ip }
+                if (idx >= 0) results[idx] = entry else results.add(entry)
                 // 达到期望网速 → 立即停止整个扫描(原版 maxSpeed 达标即停)
                 if (expectedSpeedMbps > 0 && speed.bandwidthMbps >= expectedSpeedMbps) {
                     break@batchLoop

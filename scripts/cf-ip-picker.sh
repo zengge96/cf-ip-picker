@@ -120,11 +120,23 @@ generate_pool() {
     local -n _out="$1"; _out=()
     local ip
     local round=0
+    # 前缀过滤时预先筛出匹配段,避免每轮全量遍历 6534 段(原先单段前缀慢到像死循环)
+    local ranges="$ALL_RANGES"
+    if [[ -n "$PREFIX" ]]; then
+        local -a matched=()
+        while IFS= read -r cidr; do
+            [[ -z "$cidr" ]] && continue
+            cidr_matches_prefix "$cidr" "$PREFIX" && matched+=("$cidr")
+        done <<< "$ALL_RANGES"
+        log "前缀匹配段: ${#matched[@]} 个"
+        [[ ${#matched[@]} -eq 0 ]] && return
+        ranges=$(printf '%s\n' "${matched[@]}")
+    fi
     while [[ ${#_out[@]} -lt $COUNT && $round -lt 100 ]]; do
         round=$((round+1))
         # 每轮打乱段顺序,对齐 app v1.0.21 随机选段(避免总选数据源前面的段)
         local shuffled_ranges
-        shuffled_ranges=$(echo "$ALL_RANGES" | sort -R)
+        shuffled_ranges=$(echo "$ranges" | sort -R)
         while IFS= read -r cidr; do
             [[ -z "$cidr" ]] && continue
             [[ ${#_out[@]} -ge $COUNT ]] && break

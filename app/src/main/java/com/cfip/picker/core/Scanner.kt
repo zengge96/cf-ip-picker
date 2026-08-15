@@ -18,7 +18,14 @@ class Scanner(
 ) {
     private var cancelled = false
 
+    // 部分结果快照:每次 results 变更后同步,供取消时提取已测结果(线程安全:volatile 引用替换)
+    @Volatile
+    private var snapshot: List<ScanResult> = emptyList()
+
     fun cancel() { cancelled = true }
+
+    /** 当前已收集的部分结果(取消时取出来显示) */
+    fun currentResults(): List<ScanResult> = snapshot
 
     /**
      * 执行完整扫描(批次循环,对齐原版)
@@ -174,6 +181,8 @@ class Scanner(
                 // 同一 IP 已测过(如精确前缀时每批都是同一个 IP)→ 更新该条记录,避免 LazyColumn key 重复崩溃
                 val idx = results.indexOfFirst { it.ip == ip }
                 if (idx >= 0) results[idx] = entry else results.add(entry)
+                // 同步快照(取消时保留已测结果)
+                snapshot = ArrayList(results)
                 // 达到期望网速 → 立即停止整个扫描(原版 maxSpeed 达标即停)
                 if (expectedSpeedMbps > 0 && speed.bandwidthMbps >= expectedSpeedMbps) {
                     break@batchLoop

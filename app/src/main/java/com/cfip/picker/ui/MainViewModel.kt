@@ -36,6 +36,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<UiState> = _state
 
     private var scanJob: Job? = null
+    private var scannerRef: Scanner? = null
 
     init {
         // 初始化数据缓存目录(对应原版 setCacheDir)
@@ -63,6 +64,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun startScan() {
+        // 防御:若旧任务仍在跑(取消未完全停止),先取消它,避免多任务并发
+        scannerRef?.cancel()
+        scanJob?.cancel()
+        scannerRef = null
         if (_state.value.scanning) return
         _state.value = _state.value.copy(scanning = true, error = null)
         val expected = if (_state.value.expectedSpeed > 0) _state.value.expectedSpeed else 1 // 留空默认 1Mbps
@@ -78,6 +83,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val scanner = Scanner { done, total, ip ->
                     _state.value = _state.value.copy(progress = done, total = total, currentIp = ip)
                 }
+                scannerRef = scanner
                 // 2. 执行扫描:批次循环对齐原版(每批≤100随机采样 → 并发RTT → 联通性筛选 → 前10测速 → 达标即停,没达标下一批)
                 val results = scanner.scan(
                     batchSize = 100,
@@ -91,8 +97,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     ipPrefix = prefix,
                     useBaiduProxy = useProxy,
                 )
+                scannerRef = null
                 _state.value = _state.value.copy(scanning = false, results = results)
             } catch (e: Exception) {
+                scannerRef = null
                 android.util.Log.e("CFIPPicker", "扫描失败", e)
                 _state.value = _state.value.copy(scanning = false, error = e.message ?: "扫描失败")
             }
@@ -100,7 +108,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun cancelScan() {
+        // 1. 先通知 Scanner 停止循环(阻塞的 RTT/测速会在检查点尽快退出)
+        val scanner = scannerRef
+        scanner?.cancel()
+        scannerRef = null
+        // 2. 取消协程(若有 awaitAll 等挂起点会抛 CancellationException)
         scanJob?.cancel()
-        _state.value = _state.value.copy(scanning = false)
+        scanJob = null
+        // 3. 提取已测的部分结果并显示(用户要求:取消时保留已有结果)
+        val partial = scanner?.currentResults()
+        if (partial.isNullOrEmpty()) {
+            _state.value = _state.value.copy(scanning = false)
+        } else {
+            _state.value = _state.value.copy(scanning = false, results = partial)
+        }
     }
 }

@@ -121,6 +121,27 @@ fun MainScreen(viewModel: MainViewModel) {
                 enabled = !state.scanning,
             )
         }
+        Spacer(Modifier.height(4.dp))
+
+        // 随机选择测速候选(默认关 = 按 RTT 排序取前10;开 = RTT 有响应的 IP 随机取 N 个)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("随机选择测速候选", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "不按 RTT 排序,从响应 IP 随机取",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = state.randomSelectCandidates,
+                onCheckedChange = { v -> viewModel.setRandomSelectCandidates(v) },
+                enabled = !state.scanning,
+            )
+        }
         Spacer(Modifier.height(12.dp))
 
         // 控制按钮

@@ -28,6 +28,8 @@ data class UiState(
     val ipPrefix: String = "",
     // 是否通过百度前置代理测试(开启后 RTT/测速走 cloudnproxy.baidu.com 隧道)
     val useBaiduProxy: Boolean = false,
+    // 是否随机选择测速候选(默认关 = 按 RTT 排序取前10;开 = RTT 有响应的 IP 随机取 N 个)
+    val randomSelectCandidates: Boolean = false,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -63,6 +65,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = _state.value.copy(useBaiduProxy = enable)
     }
 
+    /** 设置是否随机选择测速候选(默认关 = 按 RTT 排序取前10) */
+    fun setRandomSelectCandidates(enable: Boolean) {
+        _state.value = _state.value.copy(randomSelectCandidates = enable)
+    }
+
     fun startScan() {
         // 防御:若旧任务仍在跑(取消未完全停止),先取消它,避免多任务并发
         scannerRef?.cancel()
@@ -74,6 +81,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val expectedLatency = _state.value.expectedLatencyMs
         val prefix = _state.value.ipPrefix
         val useProxy = _state.value.useBaiduProxy
+        val randomSelect = _state.value.randomSelectCandidates
         scanJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 // 1. 拉取测速文件路径 + 机房位置 + 联通性测试 URL(网络操作必须在 IO 线程)
@@ -96,6 +104,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     locationsJson = locations,
                     ipPrefix = prefix,
                     useBaiduProxy = useProxy,
+                    randomSelectCandidates = randomSelect,
                 )
                 scannerRef = null
                 _state.value = _state.value.copy(scanning = false, results = results)

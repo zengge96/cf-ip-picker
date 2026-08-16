@@ -30,11 +30,12 @@ class Scanner(
     /**
      * 执行完整扫描(批次循环,对齐原版)
      * @param batchSize 每批随机采样 IP 数(原版上限 100)
-     * @param speedTestCandidates 延迟排序后参与测速的数量(原版前 10)
+     * @param speedTestCandidates 参与测速的数量(原版前 10)
      * @param speedTestFile 测速文件路径(来自 /url 端点)
      * @param httpTestUrl 联通性测试 URL(来自 /http_test_url 端点,可为空 = 跳过联通性测试)
      * @param expectedSpeedMbps 期望网速;>0 时达标即停,0 表示不限
      * @param expectedLatencyMs 期望时延(ms);>0 时 RTT 测试后只保留延迟 <= 期望值的 IP,0 表示不限
+     * @param randomSelectCandidates true = 不按 RTT 排序,从 RTT 有响应的 IP 随机选 speedTestCandidates 个;false(默认) = 按延迟排序取前 N
      * @param maxBatches 最多批次(防死循环;原版理论上直到找到)
      * @param locationsJson 机房位置数据(用于反查 IP 归属,可为空)
      * @param ipPrefix 用户指定 IPv4 前缀(如 172.64.x.x);为空则保持原版全量随机逻辑
@@ -47,6 +48,7 @@ class Scanner(
         httpTestUrl: String = "",
         expectedSpeedMbps: Int = 0,
         expectedLatencyMs: Int = 0,
+        randomSelectCandidates: Boolean = false,
         maxBatches: Int = 20,
         locationsJson: String = "[]",
         ipPrefix: String = "",
@@ -156,8 +158,12 @@ class Scanner(
 
             onProgress(0, reachable.size, "第${batch}批:联通性通过,单线程测速")
 
-            // 2c. 【阶段二】单线程测速前 N 个(原版前10),达期望网速即停
-            val candidates = reachable.take(speedTestCandidates)
+            // 2c. 【阶段二】测速前 N 个(默认按 RTT 排序前10;开启随机选择则从 RTT 有响应的 IP 随机取 N 个)
+            val candidates = if (randomSelectCandidates) {
+                reachable.shuffled().take(speedTestCandidates)
+            } else {
+                reachable.take(speedTestCandidates)
+            }
             var tested = 0
             for ((ip, latency) in candidates) {
                 if (cancelled) break@batchLoop

@@ -5,17 +5,19 @@
 #   随机选段(每段随机最后一位) → 多轮补齐到100个 → 并发RTT(20/批) → 期望时延筛选
 #   → 并发联通性测试(20/批) → 前N单线程测速(每IP最长5s,达标即停) → 输出排序结果
 #
+#   --random = 测速候选不按 RTT 排序,从 RTT 有响应的 IP 随机取 N 个(默认关)
+#
 # 依赖: bash4+, curl, awk, grep, shuf(或 sort -R), date, head/tail/cut
 # 用法:
 #   ./cf-ip-picker.sh [--speed 10] [--latency 100] [--prefix 172.64.x.x] \
 #                     [--count 100] [--top 10] [--batch 20] [--max-batches 20] \
-#                     [--baidu] [--no-connectivity] [--verbose] [--help]
+#                     [--random] [--baidu] [--no-connectivity] [--verbose] [--help]
 #
 # 示例:
 #   ./cf-ip-picker.sh                              # 默认扫100个,期望1Mbps
 #   ./cf-ip-picker.sh --speed 20 --latency 150     # 期望20Mbps且延迟<=150ms
 #   ./cf-ip-picker.sh --prefix 172.64.145.210      # 只测指定IP
-#   ./cf-ip-picker.sh --prefix 172.64.x.x --count 200
+#   ./cf-ip-picker.sh --prefix 172.64.x.x --count 200 --random   # 随机选测速候选
 # =============================================================================
 set -uo pipefail
 
@@ -33,6 +35,7 @@ BATCH=20                             # 并发批大小
 MAX_BATCHES=20                       # 最多批次(防死循环)
 BAIDU_PROXY=0                        # 是否走百度前置代理
 DO_CONNECTIVITY=1                    # 是否做联通性测试
+RANDOM_SELECT=0                      # 测速候选是否随机选(默认关=按RTT排序取前N;开=响应IP随机取N)
 VERBOSE=0
 BAIDU_PROXY_HOST="cloudnproxy.baidu.com"
 BAIDU_PROXY_PORT=443
@@ -53,6 +56,7 @@ while [[ $# -gt 0 ]]; do
         --top)            TOP="$2"; shift 2 ;;
         --batch)          BATCH="$2"; shift 2 ;;
         --max-batches)    MAX_BATCHES="$2"; shift 2 ;;
+        --random)         RANDOM_SELECT=1; shift ;;
         --baidu)          BAIDU_PROXY=1; shift ;;
         --no-connectivity) DO_CONNECTIVITY=0; shift ;;
         --verbose)        VERBOSE=1; shift ;;
@@ -241,7 +245,7 @@ lookup_city() {
 
 # ------------------------------ 主流程 ------------------------------
 echo "== CF优选IP 命令行版 =="
-echo "API: $API_BASE | 期望: ${EXPECTED_SPEED}Mbps 时延≤${EXPECTED_LATENCY}ms | 候选: $COUNT/批 ×$MAX_BATCHES 批 | 测速前$TOP (每IP ${SPEED_TIMEOUT}s)"
+echo "API: $API_BASE | 期望: ${EXPECTED_SPEED}Mbps 时延≤${EXPECTED_LATENCY}ms | 候选: $COUNT/批 ×$MAX_BATCHES 批 | 测速前$TOP (每IP ${SPEED_TIMEOUT}s)${RANDOM_SELECT:+ | 随机选候选}"
 [[ -n "$PREFIX" ]] && echo "前缀过滤: $PREFIX"
 [[ $BAIDU_PROXY -eq 1 ]] && echo "百度前置代理: 开启"
 
@@ -331,10 +335,17 @@ for ((batch=1; batch<=MAX_BATCHES; batch++)); do
         [[ ${#SORTED[@]} -eq 0 ]] && { echo "本批全部不通,下一批"; continue; }
     fi
 
-    # 4. 前 N 个单线程测速,达标即停
-    echo "测速前 ${TOP} 个..."
+    # 4. 测速候选:默认按 RTT 排序取前 TOP;--random 时从 RTT 有响应的 IP 随机取 TOP 个(对齐 app v1.0.25)
+    local -a CANDIDATES=()
+    if [[ $RANDOM_SELECT -eq 1 ]]; then
+        mapfile -t CANDIDATES < <(printf '%s\n' "${SORTED[@]}" | sort -R | head -"$TOP")
+        echo "测速前 ${TOP} 个(随机选择)..."
+    else
+        CANDIDATES=("${SORTED[@]:0:$TOP}")
+        echo "测速前 ${TOP} 个..."
+    fi
     declared=0
-    for line in "${SORTED[@]:0:$TOP}"; do
+    for line in "${CANDIDATES[@]}"; do
         ip=$(echo "$line" | awk '{print $1}')
         latency=$(echo "$line" | awk '{print $2}')
         read -r mbps colo < <(speed_one "$ip")

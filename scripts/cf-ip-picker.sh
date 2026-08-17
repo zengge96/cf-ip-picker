@@ -336,7 +336,7 @@ for ((batch=1; batch<=MAX_BATCHES; batch++)); do
     fi
 
     # 4. 测速候选:默认按 RTT 排序取前 TOP;--random 时从 RTT 有响应的 IP 随机取 TOP 个(对齐 app v1.0.25)
-    local -a CANDIDATES=()
+    declare -a CANDIDATES=()
     if [[ $RANDOM_SELECT -eq 1 ]]; then
         mapfile -t CANDIDATES < <(printf '%s\n' "${SORTED[@]}" | sort -R | head -"$TOP")
         echo "测速前 ${TOP} 个(随机选择)..."
